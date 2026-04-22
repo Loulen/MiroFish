@@ -391,15 +391,15 @@ class OasisProfileGenerator:
                     if hasattr(node, 'summary') and node.summary:
                         all_summaries.add(node.summary)
                     if hasattr(node, 'name') and node.name and node.name != entity_name:
-                        all_summaries.add(f"相关实体: {node.name}")
+                        all_summaries.add(f"Entité associée : {node.name}")
             results["node_summaries"] = list(all_summaries)
             
             # 构建综合上下文
             context_parts = []
             if results["facts"]:
-                context_parts.append("事实信息:\n" + "\n".join(f"- {f}" for f in results["facts"][:20]))
+                context_parts.append("Informations factuelles :\n" + "\n".join(f"- {f}" for f in results["facts"][:20]))
             if results["node_summaries"]:
-                context_parts.append("相关实体:\n" + "\n".join(f"- {s}" for s in results["node_summaries"][:10]))
+                context_parts.append("Entités associées :\n" + "\n".join(f"- {s}" for s in results["node_summaries"][:10]))
             results["context"] = "\n\n".join(context_parts)
             
             logger.info(f"Zep混合检索完成: {entity_name}, 获取 {len(results['facts'])} 条事实, {len(results['node_summaries'])} 个相关节点")
@@ -429,7 +429,7 @@ class OasisProfileGenerator:
                 if value and str(value).strip():
                     attrs.append(f"- {key}: {value}")
             if attrs:
-                context_parts.append("### 实体属性\n" + "\n".join(attrs))
+                context_parts.append("### Attributs de l'entité\n" + "\n".join(attrs))
         
         # 2. 添加相关边信息（事实/关系）
         existing_facts = set()
@@ -445,12 +445,12 @@ class OasisProfileGenerator:
                     existing_facts.add(fact)
                 elif edge_name:
                     if direction == "outgoing":
-                        relationships.append(f"- {entity.name} --[{edge_name}]--> (相关实体)")
+                        relationships.append(f"- {entity.name} --[{edge_name}]--> (entité associée)")
                     else:
-                        relationships.append(f"- (相关实体) --[{edge_name}]--> {entity.name}")
+                        relationships.append(f"- (entité associée) --[{edge_name}]--> {entity.name}")
             
             if relationships:
-                context_parts.append("### 相关事实和关系\n" + "\n".join(relationships))
+                context_parts.append("### Faits et relations associés\n" + "\n".join(relationships))
         
         # 3. 添加关联节点的详细信息
         if entity.related_nodes:
@@ -470,7 +470,7 @@ class OasisProfileGenerator:
                     related_info.append(f"- **{node_name}**{label_str}")
             
             if related_info:
-                context_parts.append("### 关联实体信息\n" + "\n".join(related_info))
+                context_parts.append("### Informations sur les entités associées\n" + "\n".join(related_info))
         
         # 4. 使用Zep混合检索获取更丰富的信息
         zep_results = self._search_zep_for_entity(entity)
@@ -479,10 +479,10 @@ class OasisProfileGenerator:
             # 去重：排除已存在的事实
             new_facts = [f for f in zep_results["facts"] if f not in existing_facts]
             if new_facts:
-                context_parts.append("### Zep检索到的事实信息\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
+                context_parts.append("### Informations factuelles récupérées via Zep\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
         
         if zep_results.get("node_summaries"):
-            context_parts.append("### Zep检索到的相关节点\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
+            context_parts.append("### Nœuds associés récupérés via Zep\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
         
         return "\n\n".join(context_parts)
     
@@ -671,7 +671,7 @@ class OasisProfileGenerator:
     
     def _get_system_prompt(self, is_individual: bool) -> str:
         """获取系统提示词"""
-        base_prompt = "你是社交媒体用户画像生成专家。生成详细、真实的人设用于舆论模拟,最大程度还原已有现实情况。必须返回有效的JSON格式，所有字符串值不能包含未转义的换行符。"
+        base_prompt = "Tu es un expert en génération de profils d'utilisateurs de réseaux sociaux. Génère des personnalités détaillées et réalistes pour la simulation d'opinion publique, en restituant au maximum la situation réelle existante. Tu dois retourner un format JSON valide, toutes les valeurs de chaînes ne doivent pas contenir de sauts de ligne non échappés."
         return f"{base_prompt}\n\n{get_language_instruction()}"
     
     def _build_individual_persona_prompt(
@@ -684,43 +684,43 @@ class OasisProfileGenerator:
     ) -> str:
         """构建个人实体的详细人设提示词"""
         
-        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
-        context_str = context[:3000] if context else "无额外上下文"
-        
-        return f"""为实体生成详细的社交媒体用户人设,最大程度还原已有现实情况。
+        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "Aucun"
+        context_str = context[:3000] if context else "Aucun contexte supplémentaire"
 
-实体名称: {entity_name}
-实体类型: {entity_type}
-实体摘要: {entity_summary}
-实体属性: {attrs_str}
+        return f"""Générer une personnalité détaillée d'utilisateur de réseaux sociaux pour cette entité, en restituant au maximum la situation réelle existante.
 
-上下文信息:
+Nom de l'entité : {entity_name}
+Type d'entité : {entity_type}
+Résumé de l'entité : {entity_summary}
+Attributs de l'entité : {attrs_str}
+
+Informations contextuelles :
 {context_str}
 
-请生成JSON，包含以下字段:
+Générer un JSON contenant les champs suivants :
 
-1. bio: 社交媒体简介，200字
-2. persona: 详细人设描述（2000字的纯文本），需包含:
-   - 基本信息（年龄、职业、教育背景、所在地）
-   - 人物背景（重要经历、与事件的关联、社会关系）
-   - 性格特征（MBTI类型、核心性格、情绪表达方式）
-   - 社交媒体行为（发帖频率、内容偏好、互动风格、语言特点）
-   - 立场观点（对话题的态度、可能被激怒/感动的内容）
-   - 独特特征（口头禅、特殊经历、个人爱好）
-   - 个人记忆（人设的重要部分，要介绍这个个体与事件的关联，以及这个个体在事件中的已有动作与反应）
-3. age: 年龄数字（必须是整数）
-4. gender: 性别，必须是英文: "male" 或 "female"
-5. mbti: MBTI类型（如INTJ、ENFP等）
-6. country: 国家（使用中文，如"中国"）
-7. profession: 职业
-8. interested_topics: 感兴趣话题数组
+1. bio : présentation sur les réseaux sociaux, 200 caractères
+2. persona : description détaillée de la personnalité (2000 caractères de texte brut), devant inclure :
+   - Informations de base (âge, profession, formation, localisation)
+   - Contexte personnel (expériences marquantes, lien avec l'événement, relations sociales)
+   - Traits de caractère (type MBTI, personnalité principale, mode d'expression émotionnelle)
+   - Comportement sur les réseaux sociaux (fréquence de publication, préférences de contenu, style d'interaction, particularités linguistiques)
+   - Positions et opinions (attitude sur le sujet, contenu susceptible de provoquer colère/émotion)
+   - Caractéristiques uniques (expressions favorites, expériences particulières, loisirs)
+   - Mémoire personnelle (partie importante de la personnalité, décrire le lien de cet individu avec l'événement, ainsi que ses actions et réactions existantes dans l'événement)
+3. age : âge en chiffre (doit être un entier)
+4. gender : genre, doit être en anglais : "male" ou "female"
+5. mbti : type MBTI (ex. INTJ, ENFP, etc.)
+6. country : pays
+7. profession : profession
+8. interested_topics : tableau de sujets d'intérêt
 
-重要:
-- 所有字段值必须是字符串或数字，不要使用换行符
-- persona必须是一段连贯的文字描述
-- {get_language_instruction()} (gender字段必须用英文male/female)
-- 内容要与实体信息保持一致
-- age必须是有效的整数，gender必须是"male"或"female"
+Important :
+- Toutes les valeurs de champs doivent être des chaînes ou des nombres, ne pas utiliser de sauts de ligne
+- persona doit être une description textuelle cohérente
+- {get_language_instruction()} (le champ gender doit être en anglais male/female)
+- Le contenu doit être cohérent avec les informations de l'entité
+- age doit être un entier valide, gender doit être "male" ou "female"
 """
 
     def _build_group_persona_prompt(
@@ -733,43 +733,43 @@ class OasisProfileGenerator:
     ) -> str:
         """构建群体/机构实体的详细人设提示词"""
         
-        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "无"
-        context_str = context[:3000] if context else "无额外上下文"
-        
-        return f"""为机构/群体实体生成详细的社交媒体账号设定,最大程度还原已有现实情况。
+        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "Aucun"
+        context_str = context[:3000] if context else "Aucun contexte supplémentaire"
 
-实体名称: {entity_name}
-实体类型: {entity_type}
-实体摘要: {entity_summary}
-实体属性: {attrs_str}
+        return f"""Générer une configuration détaillée de compte de réseaux sociaux pour cette entité institution/groupe, en restituant au maximum la situation réelle existante.
 
-上下文信息:
+Nom de l'entité : {entity_name}
+Type d'entité : {entity_type}
+Résumé de l'entité : {entity_summary}
+Attributs de l'entité : {attrs_str}
+
+Informations contextuelles :
 {context_str}
 
-请生成JSON，包含以下字段:
+Générer un JSON contenant les champs suivants :
 
-1. bio: 官方账号简介，200字，专业得体
-2. persona: 详细账号设定描述（2000字的纯文本），需包含:
-   - 机构基本信息（正式名称、机构性质、成立背景、主要职能）
-   - 账号定位（账号类型、目标受众、核心功能）
-   - 发言风格（语言特点、常用表达、禁忌话题）
-   - 发布内容特点（内容类型、发布频率、活跃时间段）
-   - 立场态度（对核心话题的官方立场、面对争议的处理方式）
-   - 特殊说明（代表的群体画像、运营习惯）
-   - 机构记忆（机构人设的重要部分，要介绍这个机构与事件的关联，以及这个机构在事件中的已有动作与反应）
-3. age: 固定填30（机构账号的虚拟年龄）
-4. gender: 固定填"other"（机构账号使用other表示非个人）
-5. mbti: MBTI类型，用于描述账号风格，如ISTJ代表严谨保守
-6. country: 国家（使用中文，如"中国"）
-7. profession: 机构职能描述
-8. interested_topics: 关注领域数组
+1. bio : présentation du compte officiel, 200 caractères, professionnelle et appropriée
+2. persona : description détaillée du compte (2000 caractères de texte brut), devant inclure :
+   - Informations de base sur l'institution (nom officiel, nature de l'institution, contexte de création, fonctions principales)
+   - Positionnement du compte (type de compte, public cible, fonctions principales)
+   - Style de communication (caractéristiques linguistiques, expressions courantes, sujets tabous)
+   - Caractéristiques du contenu publié (types de contenu, fréquence de publication, horaires d'activité)
+   - Position et attitude (position officielle sur les sujets clés, gestion des controverses)
+   - Notes spéciales (profil du groupe représenté, habitudes de gestion)
+   - Mémoire institutionnelle (partie importante de la personnalité, décrire le lien de cette institution avec l'événement, ainsi que ses actions et réactions existantes dans l'événement)
+3. age : fixé à 30 (âge virtuel du compte institutionnel)
+4. gender : fixé à "other" (les comptes institutionnels utilisent other pour indiquer une entité non personnelle)
+5. mbti : type MBTI, pour décrire le style du compte, ex. ISTJ pour rigoureux et conservateur
+6. country : pays
+7. profession : description des fonctions de l'institution
+8. interested_topics : tableau des domaines d'intérêt
 
-重要:
-- 所有字段值必须是字符串或数字，不允许null值
-- persona必须是一段连贯的文字描述，不要使用换行符
-- {get_language_instruction()} (gender字段必须用英文"other")
-- age必须是整数30，gender必须是字符串"other"
-- 机构账号发言要符合其身份定位"""
+Important :
+- Toutes les valeurs de champs doivent être des chaînes ou des nombres, pas de valeurs null
+- persona doit être une description textuelle cohérente, ne pas utiliser de sauts de ligne
+- {get_language_instruction()} (le champ gender doit être en anglais "other")
+- age doit être l'entier 30, gender doit être la chaîne "other"
+- Les publications du compte institutionnel doivent correspondre à son positionnement"""
     
     def _generate_profile_rule_based(
         self,
@@ -814,7 +814,7 @@ class OasisProfileGenerator:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "France",
                 "profession": "Media",
                 "interested_topics": ["General News", "Current Events", "Public Affairs"],
             }
@@ -826,7 +826,7 @@ class OasisProfileGenerator:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "France",
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
