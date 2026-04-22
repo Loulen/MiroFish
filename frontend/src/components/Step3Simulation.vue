@@ -687,11 +687,45 @@ watch(() => props.systemLogs?.length, () => {
   })
 })
 
-onMounted(() => {
+onMounted(async () => {
   addLog(t('log.step3Init'))
-  if (props.simulationId) {
-    doStartSimulation()
+  if (!props.simulationId) return
+
+  // Check if simulation already has state before starting a new one
+  try {
+    const res = await getRunStatus(props.simulationId)
+    if (res.success && res.data && res.data.runner_status) {
+      const status = res.data.runner_status
+      if (status === 'running' || status === 'starting') {
+        addLog('Simulation already running, resuming monitoring...')
+        runStatus.value = res.data
+        phase.value = 1
+        emit('update-status', 'processing')
+        startStatusPolling()
+        startDetailPolling()
+        fetchRunStatusDetail()
+        return
+      }
+      if (status === 'completed' || status === 'stopped') {
+        addLog('Simulation already finished (' + status + '), showing results...')
+        runStatus.value = res.data
+        phase.value = 2
+        emit('update-status', 'completed')
+        fetchRunStatusDetail()
+        return
+      }
+      if (status === 'failed') {
+        addLog('Previous simulation failed. Ready to restart.')
+        runStatus.value = res.data
+        emit('update-status', 'error')
+        return
+      }
+    }
+  } catch (err) {
+    addLog('Could not check existing status: ' + err.message)
   }
+
+  doStartSimulation()
 })
 
 onUnmounted(() => {
